@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.9"
 
 services:
 
@@ -13,7 +13,8 @@ services:
     restart: unless-stopped
 
   docker-agent:
-    image: jenkins/inbound-agent:latest
+    build:
+      context: ./agent        # dossier où se trouve TON Dockerfile
     container_name: jenkins-agent
     environment:
       JENKINS_URL: "http://jenkins-master:8080/"
@@ -21,7 +22,6 @@ services:
       JENKINS_AGENT_NAME: "docker-agent"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/local/bin/docker:/usr/bin/docker
     restart: unless-stopped
 
 volumes:

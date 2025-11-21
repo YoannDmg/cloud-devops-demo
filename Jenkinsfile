@@ -1,6 +1,6 @@
 pipeline {
 
-    agent { label 'docker' }
+    agent none   // IMPORTANT : éviter d'utiliser le master
 
     environment {
         IMAGE_BACKEND  = "ydmg/cloud-devops-backend"
@@ -11,6 +11,7 @@ pipeline {
     stages {
 
         stage('Checkout') {
+            agent { label 'docker' }
             steps {
                 checkout scm
             }
@@ -18,7 +19,8 @@ pipeline {
 
         stage('Build Backend') {
             agent {
-                docker { 
+                docker {
+                    label 'docker'        // <-- OBLIGATOIRE
                     image 'node:20-alpine'
                     args '-u root:root'
                 }
@@ -34,7 +36,8 @@ pipeline {
 
         stage('Build Frontend') {
             agent {
-                docker { 
+                docker {
+                    label 'docker'
                     image 'node:20-alpine'
                     args '-u root:root'
                 }
@@ -49,6 +52,7 @@ pipeline {
         }
 
         stage('Docker Login') {
+            agent { label 'docker' }
             steps {
                 withCredentials([usernamePassword(credentialsId: DOCKER_CREDS,
                                                  usernameVariable: 'USER',
@@ -61,6 +65,7 @@ pipeline {
         }
 
         stage('Build Docker Images') {
+            agent { label 'docker' }
             steps {
                 sh "docker build -t ${IMAGE_BACKEND}:latest ./backend"
                 sh "docker build -t ${IMAGE_FRONTEND}:latest ./frontend"
@@ -68,6 +73,7 @@ pipeline {
         }
 
         stage('Push Images') {
+            agent { label 'docker' }
             steps {
                 sh "docker push ${IMAGE_BACKEND}:latest"
                 sh "docker push ${IMAGE_FRONTEND}:latest"

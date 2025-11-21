@@ -16,7 +16,7 @@ services:
     image: jenkins/inbound-agent:latest
     container_name: jenkins-agent
     environment:
-      JENKINS_URL: "http://jenkins-master:8080/jenkins/"
+      JENKINS_URL: "http://jenkins-master:8080/"
       JENKINS_SECRET: "e2c4a1599b7be34a3e05ef19d3b85633c988aebff67daa0d6b4ea1cccba9d928"
       JENKINS_AGENT_NAME: "docker-agent"
     volumes:

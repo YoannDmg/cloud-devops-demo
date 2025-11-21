@@ -17,6 +17,12 @@ pipeline {
         }
 
         stage('Build Backend') {
+            agent {
+                docker { 
+                    image 'node:20-alpine'
+                    args '-u root:root'
+                }
+            }
             steps {
                 sh """
                 cd backend
@@ -27,6 +33,12 @@ pipeline {
         }
 
         stage('Build Frontend') {
+            agent {
+                docker { 
+                    image 'node:20-alpine'
+                    args '-u root:root'
+                }
+            }
             steps {
                 sh """
                 cd frontend

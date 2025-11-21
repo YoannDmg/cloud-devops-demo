@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY       = "docker.io"
         IMAGE_BACKEND  = "ydmg/cloud-devops-backend"
         IMAGE_FRONTEND = "ydmg/cloud-devops-frontend"
         DOCKER_CREDS   = "docker-registry"
@@ -10,26 +9,36 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout SCM') {
             steps {
-                git branch: 'main', url: 'https://github.com/**TON_REPO_ICI**.git'
+                checkout scm
             }
         }
 
         stage('Build Backend') {
             steps {
-                dir('backend') {
-                    sh 'npm install'
-                    sh 'npm run build || true'
+                script {
+                    docker.image('node:20-alpine').inside {
+                        sh """
+                            cd backend
+                            npm install
+                            npm run build
+                        """
+                    }
                 }
             }
         }
 
         stage('Build Frontend') {
             steps {
-                dir('frontend') {
-                    sh 'npm install'
-                    sh 'npm run build --prod || true'
+                script {
+                    docker.image('node:20-alpine').inside {
+                        sh """
+                            cd frontend
+                            npm install
+                            npm run build --prod
+                        """
+                    }
                 }
             }
         }
@@ -37,12 +46,12 @@ pipeline {
         stage('Docker Login') {
             steps {
                 script {
-                    withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDS}",
-                                                     usernameVariable: 'DOCKER_USER',
-                                                     passwordVariable: 'DOCKER_PASS')]) {
-                        sh """
-                           echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        """
+                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDS,
+                                                     usernameVariable: 'USER',
+                                                     passwordVariable: 'PASS')]) {
+                        sh '''
+                            echo "$PASS" | docker login -u "$USER" --password-stdin
+                        '''
                     }
                 }
             }
@@ -50,25 +59,15 @@ pipeline {
 
         stage('Build Docker Images') {
             steps {
-                script {
-                    sh "docker build -t ${IMAGE_BACKEND}:latest ./backend"
-                    sh "docker build -t ${IMAGE_FRONTEND}:latest ./frontend"
-                }
+                sh "docker build -t ${IMAGE_BACKEND}:latest ./backend"
+                sh "docker build -t ${IMAGE_FRONTEND}:latest ./frontend"
             }
         }
 
         stage('Push Images') {
             steps {
-                script {
-                    sh "docker push ${IMAGE_BACKEND}:latest"
-                    sh "docker push ${IMAGE_FRONTEND}:latest"
-                }
-            }
-        }
-
-        stage('Cleanup') {
-            steps {
-                sh "docker system prune -f || true"
+                sh "docker push ${IMAGE_BACKEND}:latest"
+                sh "docker push ${IMAGE_FRONTEND}:latest"
             }
         }
     }

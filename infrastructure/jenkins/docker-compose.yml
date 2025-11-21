@@ -1,18 +1,28 @@
-version: "3.9"
+version: '3.9'
 
 services:
-  jenkins:
+
+  jenkins-master:
     image: jenkins/jenkins:lts
-    container_name: jenkins
-    user: root
+    container_name: jenkins-master
     ports:
       - "8080:8080"
       - "50000:50000"
     volumes:
-      - jenkins_home:/var/jenkins_home
+      - jenkins_master_home:/var/jenkins_home
+    restart: unless-stopped
+
+  docker-agent:
+    image: jenkins/inbound-agent:latest
+    container_name: jenkins-agent
+    environment:
+      JENKINS_URL: "http://jenkins-master:8080/jenkins/"
+      JENKINS_SECRET: "e2c4a1599b7be34a3e05ef19d3b85633c988aebff67daa0d6b4ea1cccba9d928"
+      JENKINS_AGENT_NAME: "docker-agent"
+    volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /usr/bin/docker:/usr/bin/docker
+      - /usr/local/bin/docker:/usr/bin/docker
     restart: unless-stopped
 
 volumes:
-  jenkins_home:
+  jenkins_master_home:

@@ -1,5 +1,6 @@
 pipeline {
-    agent any
+
+    agent { label 'docker' }
 
     environment {
         IMAGE_BACKEND  = "ydmg/cloud-devops-backend"
@@ -9,7 +10,7 @@ pipeline {
 
     stages {
 
-        stage('Checkout SCM') {
+        stage('Checkout') {
             steps {
                 checkout scm
             }
@@ -17,42 +18,32 @@ pipeline {
 
         stage('Build Backend') {
             steps {
-                script {
-                    docker.image('node:20-alpine').inside {
-                        sh """
-                            cd backend
-                            npm install
-                            npm run build
-                        """
-                    }
-                }
+                sh """
+                cd backend
+                npm install
+                npm run build
+                """
             }
         }
 
         stage('Build Frontend') {
             steps {
-                script {
-                    docker.image('node:20-alpine').inside {
-                        sh """
-                            cd frontend
-                            npm install
-                            npm run build --prod
-                        """
-                    }
-                }
+                sh """
+                cd frontend
+                npm install
+                npm run build --prod
+                """
             }
         }
 
         stage('Docker Login') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: DOCKER_CREDS,
-                                                     usernameVariable: 'USER',
-                                                     passwordVariable: 'PASS')]) {
-                        sh '''
-                            echo "$PASS" | docker login -u "$USER" --password-stdin
-                        '''
-                    }
+                withCredentials([usernamePassword(credentialsId: DOCKER_CREDS,
+                                                 usernameVariable: 'USER',
+                                                 passwordVariable: 'PASS')]) {
+                    sh '''
+                        echo "$PASS" | docker login -u "$USER" --password-stdin
+                    '''
                 }
             }
         }
@@ -74,7 +65,7 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline finished."
+            echo "Pipeline completed."
         }
     }
 }

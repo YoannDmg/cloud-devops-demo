@@ -14,8 +14,9 @@ services:
 
   docker-agent:
     build:
-      context: ./agent        # dossier où se trouve TON Dockerfile
+      context: ./agent
     container_name: jenkins-agent
+    privileged: true
     environment:
       JENKINS_URL: "http://jenkins-master:8080/"
       JENKINS_SECRET: "e2c4a1599b7be34a3e05ef19d3b85633c988aebff67daa0d6b4ea1cccba9d928"

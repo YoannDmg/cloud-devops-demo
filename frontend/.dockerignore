@@ -57,7 +57,7 @@ docker-compose*
 logs/
 *.log
 
-# Angular specific
+# Angular specific (keep angular.json and tsconfig*.json - required for build!)
 e2e/
 .browserslistrc
 karma.conf.js
@@ -66,5 +66,3 @@ karma.conf.js
 .editorconfig
 .prettierrc*
 .eslintrc*
-angular.json
-tsconfig*.json

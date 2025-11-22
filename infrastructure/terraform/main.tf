@@ -93,7 +93,9 @@ resource "aws_instance" "jenkins" {
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
   key_name               = aws_key_pair.jenkins_key.key_name
 
-  user_data = file("user_data.sh")
+  user_data = templatefile("user_data.sh", {
+    jenkins_plugins = file("plugins.txt")
+  })
 
   tags = {
     Name = "Jenkins-Server"

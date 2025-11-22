@@ -1,0 +1,9 @@
+# =============================================================================
+# NAMESPACE - Logical isolation for our application
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cloud-devops
+  labels:
+    app: cloud-devops-demo

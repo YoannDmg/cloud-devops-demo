@@ -108,9 +108,15 @@ resource "aws_instance" "jenkins" {
   vpc_security_group_ids = [aws_security_group.jenkins_sg.id]
   key_name               = aws_key_pair.jenkins.key_name
 
-  # User data script with Jenkins plugins injected from plugins.txt
+  # User data script with all configuration injected
   user_data = templatefile("user_data.sh", {
-    jenkins_plugins = file("plugins.txt")
+    jenkins_plugins          = file("plugins.txt")
+    jenkins_admin_user       = var.jenkins_admin_user
+    jenkins_admin_password   = var.jenkins_admin_password
+    docker_registry_user     = var.docker_registry_user
+    docker_registry_password = var.docker_registry_password
+    git_repo_url             = var.git_repo_url
+    git_branch               = var.git_branch
   })
 
   tags = {

@@ -21,6 +21,7 @@ workflow-aggregator:latest
 
 # Source Control
 git:latest
+github:latest
 
 # Docker Integration
 docker-workflow:latest

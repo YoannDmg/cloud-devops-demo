@@ -4,6 +4,11 @@
 terraform.tfstate
 terraform.tfstate.backup
 
+# Secrets - NEVER commit these!
+terraform.tfvars
+*.auto.tfvars
+
 # Keys
 id_rsa
 id_rsa.pub
+*.pem

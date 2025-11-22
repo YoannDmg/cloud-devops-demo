@@ -3,9 +3,10 @@
 # JENKINS SERVER INITIALIZATION SCRIPT
 # =============================================================================
 # This script is executed on first boot to configure the EC2 instance with:
-# - Jenkins CI/CD server
+# - Jenkins CI/CD server (fully configured, no manual setup)
 # - Docker for containerized builds
-# - Pre-installed Jenkins plugins (from plugins.txt)
+# - Pre-installed Jenkins plugins
+# - Auto-created admin user and pipeline job
 #
 # Logs: /var/log/user-data.log
 # =============================================================================
@@ -15,7 +16,6 @@ set -e
 # -----------------------------------------------------------------------------
 # Logging Configuration
 # -----------------------------------------------------------------------------
-# Redirect all output to both console and log file for debugging
 
 exec > >(tee -a /var/log/user-data.log) 2>&1
 
@@ -36,7 +36,7 @@ log_step "Starting Jenkins server initialization"
 # Step 1: System Update
 # -----------------------------------------------------------------------------
 
-log_step "Step 1/9: Updating system packages"
+log_step "Step 1/11: Updating system packages"
 apt-get update -y
 log_info "System packages updated successfully"
 
@@ -44,7 +44,7 @@ log_info "System packages updated successfully"
 # Step 2: Install Java
 # -----------------------------------------------------------------------------
 
-log_step "Step 2/9: Installing Java 17 (OpenJDK headless)"
+log_step "Step 2/11: Installing Java 17 (OpenJDK headless)"
 apt-get install -y openjdk-17-jre-headless
 log_info "Java version: $(java -version 2>&1 | head -n 1)"
 
@@ -52,14 +52,12 @@ log_info "Java version: $(java -version 2>&1 | head -n 1)"
 # Step 3: Add Jenkins Repository
 # -----------------------------------------------------------------------------
 
-log_step "Step 3/9: Configuring Jenkins repository"
+log_step "Step 3/11: Configuring Jenkins repository"
 
-# Add Jenkins GPG key
 curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | \
     tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
 log_info "Jenkins GPG key added"
 
-# Add Jenkins apt repository
 echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/" | \
     tee /etc/apt/sources.list.d/jenkins.list > /dev/null
 log_info "Jenkins repository configured"
@@ -70,10 +68,9 @@ apt-get update -y
 # Step 4: Install Jenkins
 # -----------------------------------------------------------------------------
 
-log_step "Step 4/9: Installing Jenkins"
+log_step "Step 4/11: Installing Jenkins"
 apt-get install -y jenkins
 
-# Stop Jenkins to configure before first real start
 systemctl stop jenkins || true
 systemctl disable jenkins
 log_info "Jenkins installed and stopped for pre-configuration"
@@ -82,10 +79,11 @@ log_info "Jenkins installed and stopped for pre-configuration"
 # Step 5: Prepare Jenkins Directories
 # -----------------------------------------------------------------------------
 
-log_step "Step 5/9: Preparing Jenkins directories"
+log_step "Step 5/11: Preparing Jenkins directories"
 mkdir -p /var/lib/jenkins/plugins
 mkdir -p /var/lib/jenkins/ref
 mkdir -p /var/lib/jenkins/init.groovy.d
+mkdir -p /var/lib/jenkins/jobs/cloud-devops-demo
 chown -R jenkins:jenkins /var/lib/jenkins
 log_info "Jenkins directories created"
 
@@ -93,19 +91,16 @@ log_info "Jenkins directories created"
 # Step 6: Install Jenkins Plugins
 # -----------------------------------------------------------------------------
 
-log_step "Step 6/9: Installing Jenkins plugins"
+log_step "Step 6/11: Installing Jenkins plugins"
 
-# Write plugins list (injected by Terraform from plugins.txt)
 cat > /var/lib/jenkins/ref/plugins.txt << 'EOF'
 ${jenkins_plugins}
 EOF
 chown jenkins:jenkins /var/lib/jenkins/ref/plugins.txt
 
-# Count plugins to install
 PLUGIN_COUNT=$(grep -c -v '^$' /var/lib/jenkins/ref/plugins.txt || echo "0")
 log_info "Plugins to install: $PLUGIN_COUNT"
 
-# Download Jenkins Plugin Installation Manager
 PLUGIN_CLI_VERSION="2.12.13"
 log_info "Downloading jenkins-plugin-manager v$${PLUGIN_CLI_VERSION}"
 
@@ -114,11 +109,9 @@ wget -q -O /tmp/jenkins-plugin-cli.jar \
     curl -sL -o /tmp/jenkins-plugin-cli.jar \
     "https://github.com/jenkinsci/plugin-installation-manager-tool/releases/download/$${PLUGIN_CLI_VERSION}/jenkins-plugin-manager-$${PLUGIN_CLI_VERSION}.jar"
 
-# Get Jenkins version for plugin compatibility
 JENKINS_VERSION=$(dpkg -s jenkins | grep Version | awk '{print $2}' | cut -d'-' -f1)
 log_info "Jenkins version detected: $JENKINS_VERSION"
 
-# Install plugins
 log_info "Installing plugins (this may take a few minutes)..."
 java -jar /tmp/jenkins-plugin-cli.jar \
     --plugin-download-directory /var/lib/jenkins/plugins \
@@ -129,35 +122,161 @@ chown -R jenkins:jenkins /var/lib/jenkins/plugins
 log_info "Plugins installed successfully"
 
 # -----------------------------------------------------------------------------
-# Step 7: Start Jenkins
+# Step 7: Configure Jenkins (Skip Setup Wizard + Create Admin)
 # -----------------------------------------------------------------------------
 
-log_step "Step 7/9: Starting Jenkins service"
-systemctl enable jenkins
-systemctl start jenkins
-log_info "Jenkins service started"
+log_step "Step 7/11: Configuring Jenkins automatically"
+
+# Disable setup wizard
+cat > /var/lib/jenkins/jenkins.install.InstallUtil.lastExecVersion << EOF
+$JENKINS_VERSION
+EOF
+
+cat > /var/lib/jenkins/jenkins.install.UpgradeWizard.state << EOF
+$JENKINS_VERSION
+EOF
+
+# Create initial admin user via Groovy script
+cat > /var/lib/jenkins/init.groovy.d/01-create-admin.groovy << 'GROOVY'
+import jenkins.model.*
+import hudson.security.*
+import jenkins.install.InstallState
+
+def instance = Jenkins.getInstance()
+
+// Create admin user
+def hudsonRealm = new HudsonPrivateSecurityRealm(false)
+hudsonRealm.createAccount("${jenkins_admin_user}", "${jenkins_admin_password}")
+instance.setSecurityRealm(hudsonRealm)
+
+// Set authorization strategy (logged-in users can do anything)
+def strategy = new FullControlOnceLoggedInAuthorizationStrategy()
+strategy.setAllowAnonymousRead(false)
+instance.setAuthorizationStrategy(strategy)
+
+// Mark setup as complete
+instance.setInstallState(InstallState.INITIAL_SETUP_COMPLETED)
+
+instance.save()
+println("Admin user '${jenkins_admin_user}' created successfully")
+GROOVY
+
+chown jenkins:jenkins /var/lib/jenkins/init.groovy.d/01-create-admin.groovy
+log_info "Admin user configuration script created"
 
 # -----------------------------------------------------------------------------
-# Step 8: Install Docker
+# Step 8: Configure Docker Registry Credentials
 # -----------------------------------------------------------------------------
 
-log_step "Step 8/9: Installing Docker"
+log_step "Step 8/11: Configuring Docker registry credentials"
+
+cat > /var/lib/jenkins/init.groovy.d/02-docker-credentials.groovy << 'GROOVY'
+import jenkins.model.*
+import com.cloudbees.plugins.credentials.*
+import com.cloudbees.plugins.credentials.domains.*
+import com.cloudbees.plugins.credentials.impl.*
+
+def instance = Jenkins.getInstance()
+def domain = Domain.global()
+def store = instance.getExtensionList('com.cloudbees.plugins.credentials.SystemCredentialsProvider')[0].getStore()
+
+def dockerCredentials = new UsernamePasswordCredentialsImpl(
+    CredentialsScope.GLOBAL,
+    "docker-registry",
+    "Docker Hub Registry Credentials",
+    "${docker_registry_user}",
+    "${docker_registry_password}"
+)
+
+store.addCredentials(domain, dockerCredentials)
+instance.save()
+println("Docker registry credentials configured successfully")
+GROOVY
+
+chown jenkins:jenkins /var/lib/jenkins/init.groovy.d/02-docker-credentials.groovy
+log_info "Docker credentials configuration script created"
+
+# -----------------------------------------------------------------------------
+# Step 9: Create Pipeline Job
+# -----------------------------------------------------------------------------
+
+log_step "Step 9/11: Creating pipeline job"
+
+cat > /var/lib/jenkins/jobs/cloud-devops-demo/config.xml << 'JOBXML'
+<?xml version='1.1' encoding='UTF-8'?>
+<flow-definition plugin="workflow-job">
+  <description>Cloud DevOps Demo - Full CI/CD Pipeline</description>
+  <keepDependencies>false</keepDependencies>
+  <properties>
+    <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+      <triggers>
+        <com.cloudbees.jenkins.GitHubPushTrigger plugin="github">
+          <spec></spec>
+        </com.cloudbees.jenkins.GitHubPushTrigger>
+      </triggers>
+    </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+  </properties>
+  <definition class="org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition" plugin="workflow-cps">
+    <scm class="hudson.plugins.git.GitSCM" plugin="git">
+      <configVersion>2</configVersion>
+      <userRemoteConfigs>
+        <hudson.plugins.git.UserRemoteConfig>
+          <url>${git_repo_url}</url>
+        </hudson.plugins.git.UserRemoteConfig>
+      </userRemoteConfigs>
+      <branches>
+        <hudson.plugins.git.BranchSpec>
+          <name>*/${git_branch}</name>
+        </hudson.plugins.git.BranchSpec>
+      </branches>
+      <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+      <submoduleCfg class="empty-list"/>
+      <extensions/>
+    </scm>
+    <scriptPath>Jenkinsfile</scriptPath>
+    <lightweight>true</lightweight>
+  </definition>
+  <triggers/>
+  <disabled>false</disabled>
+</flow-definition>
+JOBXML
+
+chown -R jenkins:jenkins /var/lib/jenkins/jobs/cloud-devops-demo
+log_info "Pipeline job 'cloud-devops-demo' created"
+
+# -----------------------------------------------------------------------------
+# Step 10: Install Docker
+# -----------------------------------------------------------------------------
+
+log_step "Step 10/11: Installing Docker"
 apt-get install -y docker.io
 systemctl enable docker
 systemctl start docker
 
-# Add Jenkins user to docker group for containerized builds
 usermod -aG docker jenkins
 log_info "Docker installed and Jenkins user added to docker group"
 log_info "Docker version: $(docker --version)"
 
 # -----------------------------------------------------------------------------
-# Step 9: Apply Docker Permissions
+# Step 11: Start Jenkins
 # -----------------------------------------------------------------------------
 
-log_step "Step 9/9: Restarting Jenkins to apply Docker permissions"
+log_step "Step 11/11: Starting Jenkins service"
+chown -R jenkins:jenkins /var/lib/jenkins
+systemctl enable jenkins
+systemctl start jenkins
+
+# Wait for Jenkins to be ready
+log_info "Waiting for Jenkins to start..."
+sleep 30
+
+# Cleanup init scripts after first run (security: remove passwords from disk)
+rm -f /var/lib/jenkins/init.groovy.d/01-create-admin.groovy
+rm -f /var/lib/jenkins/init.groovy.d/02-docker-credentials.groovy
+log_info "Init scripts cleaned up for security"
+
 systemctl restart jenkins
-log_info "Jenkins restarted with Docker permissions"
+log_info "Jenkins restarted"
 
 # -----------------------------------------------------------------------------
 # Initialization Complete
@@ -168,10 +287,12 @@ echo ""
 echo "  Jenkins Status: $(systemctl is-active jenkins)"
 echo "  Docker Status:  $(systemctl is-active docker)"
 echo ""
-echo "  Next steps:"
-echo "  1. Access Jenkins at http://<public-ip>:8080"
-echo "  2. Get initial admin password:"
-echo "     sudo cat /var/lib/jenkins/secrets/initialAdminPassword"
+echo "  Access Jenkins:"
+echo "  URL:      http://<public-ip>:8080"
+echo "  Username: ${jenkins_admin_user}"
+echo "  Password: (configured via Terraform)"
+echo ""
+echo "  Pipeline job 'cloud-devops-demo' is ready to run!"
 echo ""
 echo "  Logs:"
 echo "  - This script: /var/log/user-data.log"

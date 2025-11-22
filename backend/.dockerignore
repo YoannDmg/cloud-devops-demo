@@ -1,0 +1,65 @@
+# =============================================================================
+# DOCKER IGNORE - Backend (NestJS)
+# =============================================================================
+# Exclude files not needed in Docker build context to speed up builds
+# =============================================================================
+
+# Dependencies (will be installed fresh in container)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs (will be built fresh in container)
+dist/
+build/
+
+# Test & Coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# IDE & Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Environment files (use Docker ENV instead)
+.env
+.env.*
+!.env.example
+
+# Documentation
+*.md
+docs/
+LICENSE
+
+# CI/CD
+Jenkinsfile
+.jenkins/
+.github/
+.gitlab-ci.yml
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
+
+# Logs
+logs/
+*.log
+
+# Misc
+.editorconfig
+.prettierrc*
+.eslintrc*
+eslint.config.*
+tsconfig*.json
+nest-cli.json

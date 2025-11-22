@@ -61,5 +61,3 @@ logs/
 .prettierrc*
 .eslintrc*
 eslint.config.*
-tsconfig*.json
-nest-cli.json

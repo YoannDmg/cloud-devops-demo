@@ -1,0 +1,35 @@
+# =============================================================================
+# JENKINS PLUGINS
+# =============================================================================
+# List of Jenkins plugins to pre-install during server initialization.
+# Format: plugin-name:version (use 'latest' for most recent version)
+#
+# To add a plugin:
+#   1. Find the plugin ID at https://plugins.jenkins.io/
+#   2. Add a new line: plugin-id:latest
+#   3. Run: terraform apply
+#
+# Common plugins reference:
+#   - workflow-aggregator: Pipeline support
+#   - git: Git SCM integration
+#   - docker-workflow: Docker Pipeline steps
+#   - blueocean: Modern UI for pipelines
+# =============================================================================
+
+# Pipeline & Workflow
+workflow-aggregator:latest
+timestamper:latest
+
+# Source Control
+git:latest
+github:latest
+
+# Docker Integration
+docker-workflow:latest
+docker-plugin:latest
+
+# Security & Credentials
+credentials-binding:latest
+
+# UI Enhancement
+blueocean:latest

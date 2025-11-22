@@ -18,6 +18,7 @@
 
 # Pipeline & Workflow
 workflow-aggregator:latest
+timestamper:latest
 
 # Source Control
 git:latest
